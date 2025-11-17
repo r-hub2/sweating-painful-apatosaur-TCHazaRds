@@ -229,6 +229,7 @@ NumericVector HollandPressureProfilePi(NumericVector rMax, NumericVector dP, Num
 //' @description Wind profile time series at a grid point. Holland et al. 2010.  In this version, the exponent is allowed to vary linearly outside the radius of maximum wind. I.e. rather than take the square root, the exponent varies around 0.5.Currently this version does not have a corresponding vorticity profile set up in wind Vorticity, so it cannot be applied in some wind field modelling.
 //' @param f single coriolis parameter at the centre of TC in hz
 //' @param rMax radius of maximum winds in km
+//' @param rMax2 radius of outer 17ms winds in km
 //' @param dP pressure differential, environmental less TC central pressure in hPa
 //' @param rho density of air in Kg/m3
 //' @param R vector of distances from grid points to TC centre in km
@@ -237,7 +238,7 @@ NumericVector HollandPressureProfilePi(NumericVector rMax, NumericVector dP, Num
 //' @return array with two columns for velocity and then vorticity.
 //' //@example NewHollandWindProfilePi(-1e-4,20,20,1.15,-14,50,1.3)
 // [[Rcpp::export]]
-NumericMatrix NewHollandWindProfilePi(NumericVector f, NumericVector rMax, NumericVector dP, float rho, NumericVector R, NumericVector vMax, NumericVector beta)
+NumericMatrix NewHollandWindProfilePi(NumericVector f, NumericVector rMax, NumericVector rMax2, NumericVector dP, float rho, NumericVector R, NumericVector vMax, NumericVector beta)
 {
 	//Holland et al. 2010.  In this version, the exponent is allowed to
 	//vary linearly outside the radius of maximum wind.i.e.rather than
@@ -261,6 +262,7 @@ NumericMatrix NewHollandWindProfilePi(NumericVector f, NumericVector rMax, Numer
 	  rMaxi = rMax[i];
 	  vMaxi = vMax[i];
 	  dPi = dP[i];
+	  rGale = rMax2[i];
 	  //TClati = TClat[i];
 
 		Bs = beta[i];//(-0.000044f * powf(dPi / 100.0f, 2.0f) + 0.01 * (dPi / 100.0f) - 0.014f * fabs(TClati) + 1.0);
@@ -276,7 +278,7 @@ NumericMatrix NewHollandWindProfilePi(NumericVector f, NumericVector rMax, Numer
 		}
 
 		delta = powf(rMaxi / Ri, Bs);
-		edelta = exp(-delta);
+		edelta = exp(1-delta);
 
 		VZ(i,0) = (fi / fabs(fi)) * vMaxi * pow( delta * edelta, xx);
 		VZ(i,1) = 0.0f;// Warning dummy value
@@ -290,6 +292,7 @@ NumericMatrix NewHollandWindProfilePi(NumericVector f, NumericVector rMax, Numer
 //' @param f single coriolis parameter at the centre of TC in hz
 //' @param vMax maximum wind velocity calculation in m/s
 //' @param rMax radius of maximum winds in km
+//' @param rMax2 radius of outer radial winds in km
 //' @param dP pressure differential, environmental less TC central pressure in hPa
 //' @param cP TC central pressure in hPa
 //' @param rho density of air in Kg/m3
@@ -298,7 +301,7 @@ NumericMatrix NewHollandWindProfilePi(NumericVector f, NumericVector rMax, Numer
 //' @return array with two columns for velocity and then vorticity.
 //' //@example DoubleHollandWindProfilePi(-1e-4,20,20,10,980,1.15,1.2,50)
 // [[Rcpp::export]]
-NumericMatrix DoubleHollandWindProfilePi(NumericVector f, NumericVector vMax, NumericVector rMax, NumericVector dP, NumericVector cP, float rho, NumericVector beta, NumericVector R)
+NumericMatrix DoubleHollandWindProfilePi(NumericVector f, NumericVector vMax, NumericVector rMax, NumericVector rMax2, NumericVector dP, NumericVector cP, float rho, NumericVector beta, NumericVector R)
 {
 	//McConochie *et al*'s double Holland vortex model (based on Cardone *et
 	//al*, 1994).This application is the Coral Sea adaptation of the
@@ -308,14 +311,14 @@ NumericMatrix DoubleHollandWindProfilePi(NumericVector f, NumericVector vMax, Nu
 
 	int n = R.size();
   NumericMatrix VZ(n,2);
-	float Vi, Ri,fi,dPi,rMax1,vMaxi,cPi,betai;
+	float Vi, Ri,fi,dPi,rMax1,rMax2i,vMaxi,cPi,betai;
 	float E, d2Vm, aa, bb, cc;
 
 	float cubic = 0.0f; //cubic profile (cubic == 0.1f) to avoid the barotropic instability mentioned in Kepert 2001
 
 	float beta1, beta2;
 
-	float rMax2 = 150.0f;
+	//float rMax2 = 150.0f;
   //float rMax1 = rMax;
 	float gradientV1, gradientV2;
 
@@ -329,6 +332,7 @@ NumericMatrix DoubleHollandWindProfilePi(NumericVector f, NumericVector vMax, Nu
 	fi = f[i];
 	dPi = dP[i]*100.0f; //pa not hPa
 	rMax1 = rMax[i];
+	rMax2i = rMax2[i];
 	vMaxi = vMax[i];
 	cPi = cP[i]*100.0f;
 	betai = beta[i];
@@ -353,7 +357,7 @@ NumericMatrix DoubleHollandWindProfilePi(NumericVector f, NumericVector vMax, Nu
 
 	E = exp(1.0f);
 
-	nu = pow((rMax2 / rMax1), beta2);
+	nu = pow((rMax2i / rMax1), beta2);
   //missing powf on second line
 	d2Vm = (-1.0f / (8.0f * pow(4.0f * beta1 * dp1 / (rho * E) + (4.0f * beta2 * dp2 / rho) * nu * exp(-nu) + powf(rMax1 * fi, 2.0f), 1.5f))*
 		powf(-(4.0f * (beta1 *beta1) * dp1 / (rho * rMax1 * E)) + (4.0f * (beta1 * beta1) * dp1 / (rho * rMax1 * E)) - (4 * (beta2 *beta2) * dp2 / rho) *
@@ -381,7 +385,7 @@ NumericMatrix DoubleHollandWindProfilePi(NumericVector f, NumericVector vMax, Nu
 
 
 		mu = powf(rMax1 / Ri, beta1);
-		nu = powf(rMax2 / Ri, beta2);
+		nu = powf(rMax2i / Ri, beta2);
 		emu = exp(-mu);
 		enu = exp(-nu);
 
@@ -422,6 +426,7 @@ NumericMatrix DoubleHollandWindProfilePi(NumericVector f, NumericVector vMax, Nu
 //' @title Double Holland Pressure Profile Time Series
 //' @description Pressure profile time series at a grid point
 //' @param rMax radius of maximum winds in km
+//' @param rMax2 radius of outer radial winds in km
 //' @param dP pressure differential, environmental less TC central pressure in hPa
 //' @param cP TC central pressure in hPa
 //' @param beta exponential term for Holland vortex
@@ -429,23 +434,24 @@ NumericMatrix DoubleHollandWindProfilePi(NumericVector f, NumericVector vMax, Nu
 //' @return vector of pressures.
 //' //@example DoubleHollandPressureProfilePi(20,20,980,1.2,50)
 // [[Rcpp::export]]
-NumericVector DoubleHollandPressureProfilePi(NumericVector rMax, NumericVector dP, NumericVector cP,  NumericVector beta, NumericVector R)
+NumericVector DoubleHollandPressureProfilePi(NumericVector rMax, NumericVector rMax2, NumericVector dP, NumericVector cP,  NumericVector beta, NumericVector R)
 {
 	//Holland pressure profile
 	int n = R.size();
   NumericVector P(n);
 
-	float Ri,dPi,rMaxi,cPi;
+	float Ri,dPi,rMaxi,rMax2i,cPi;
 	float dp1,dp2;
 	float beta1, beta2;
 	float nu, mu, enu, emu;
 
-	float rMax2 = 150.0f;
+	//float rMax2 = 150.0f;
 
 
 	for(int i = 0;i < n; i++){
 	dPi = dP[i]*100;
 	rMaxi = rMax[i];
+	rMax2i = rMax2[i];
 	cPi = cP[i]*100;
 
 	if (dPi < 1500.0f)
@@ -468,7 +474,7 @@ NumericVector DoubleHollandPressureProfilePi(NumericVector rMax, NumericVector d
 		//
 		Ri = R[i];
 		mu = powf(rMaxi / Ri,beta1);
-		nu = powf(rMax2 / Ri,beta2);
+		nu = powf(rMax2i / Ri,beta2);
 		emu = exp(-mu);
 		enu = exp(-nu);
 		P[i] = (cPi + dp1*emu + dp2*enu)/100.0f;
@@ -571,7 +577,7 @@ NumericMatrix McConochieWindFieldPi(NumericVector rMax, NumericVector vMax, Nume
   float pi = 3.141592f;
 	float thetaMaxAbsolute, asym, Vsf, phi,swrf;
 	float thetaFmRAD;
-  float sf;
+  float sf, fabsVsf;
   sf = f/fabs(f);
   float piOn180 = pi / 180.0f;
 
@@ -606,16 +612,17 @@ NumericMatrix McConochieWindFieldPi(NumericVector rMax, NumericVector vMax, Nume
 		Vsf = Vi + asym;
 
 		swrf = 0.81f;
+		fabsVsf = fabs(Vsf);
 		// had an extra ;
-		if (abs(Vsf) >= 6.0f)
+		if (fabsVsf >= 6.0f)
 		{
-			swrf = 0.81f - (2.93f * (fabs(Vsf) - 6.0f) / 1000.0f);
+			swrf = 0.81f - (2.93f * (fabsVsf - 6.0f) / 1000.0f);
 		}
-		if (abs(Vsf) >= 19.5f)
+		if (fabsVsf >= 19.5f)
 		{
-			swrf = 0.77f - (4.31f * (fabs(Vsf) - 19.5f) / 1000.0f);
+			swrf = 0.77f - (4.31f * (fabsVsf - 19.5f) / 1000.0f);
 		}
-		if (abs(Vsf) >= 45.0f)
+		if (fabsVsf >= 45.0f)
 		{
 			swrf = 0.66f;
 		}
@@ -629,7 +636,7 @@ NumericMatrix McConochieWindFieldPi(NumericVector rMax, NumericVector vMax, Nume
 }
 
 //' @title Kepert Wind Field
-//' @description Time series vortex Wind, wind vectors. Kepert, J., 2001: The Dynamics of Boundary Layer Jets within the Tropical Cyclone Core.Part I : Linear Theory.J.Atmos.Sci., 58, 2469 - 2484
+//' @description Time series vortex Wind, wind vectors. Kepert, J., 2001: The Dynamics of Boundary Layer Jets within the Tropical Cyclone Core.Part I : Linear Theory.J.Atmospheric.Science., 58, 2469 - 2484
 //' @param rMax radius of maximum winds in km
 //' @param vMax maximum wind velocity calculation in m/s
 //' @param vFm input forward velocity of TC
@@ -644,7 +651,7 @@ NumericMatrix McConochieWindFieldPi(NumericVector rMax, NumericVector vMax, Nume
 NumericMatrix KepertWindFieldPi(NumericVector rMax, NumericVector vMax, NumericVector vFm, NumericVector thetaFm, NumericVector f, NumericMatrix Rlam, NumericMatrix VZ,float surface)
 {
 	// Kepert, J., 2001: The Dynamics of Boundary Layer Jets within the
-	//Tropical Cyclone Core.Part I : Linear Theory.J.Atmos.Sci., 58,
+	//Tropical Cyclone Core.Part I : Linear Theory.J.Atmospheric.Science., 58,
 	//	2469 - 2484
 	//Orginal code { Written Jeff Kepert, Bureau of Meteorology, 1998-2000.
 	//Copyright the Bureau of Meteorology.
@@ -961,6 +968,7 @@ NumericVector HollandPressureProfile(float rMax, float dP, float cP, float beta,
 //' @description Wind profile time series at a grid point. Holland et al. 2010.  In this version, the exponent is allowed to vary linearly outside the radius of maximum wind. I.e. rather than take the square root, the exponent varies around 0.5.Currently this version does not have a corresponding vorticity profile set up in wind Vorticity, so it cannot be applied in some wind field modelling.
 //' @param f single coriolis parameter at the centre of TC in hz
 //' @param rMax radius of maximum winds in km
+//' @param rMax2 radius of outer 17.5ms winds in km
 //' @param dP pressure differential, environmental less TC central pressure in hPa
 //' @param rho density of air in Kg/m3
 //' @param R vector of distances from grid points to TC centre in km
@@ -969,7 +977,7 @@ NumericVector HollandPressureProfile(float rMax, float dP, float cP, float beta,
 //' @return array with two columns for velocity and then vorticity.
 //' //@example NewHollandWindProfile(-1e-4,20,20,1.15,-14,50,1.3)
 // [[Rcpp::export]]
-NumericMatrix NewHollandWindProfile(float f, float rMax, float dP, float rho, NumericVector R, float vMax, float beta)
+NumericMatrix NewHollandWindProfile(float f, float rMax, float rMax2, float dP, float rho, NumericVector R, float vMax, float beta)
 {
   //Holland et al. 2010.  In this version, the exponent is allowed to
   //vary linearly outside the radius of maximum wind.i.e.rather than
@@ -985,7 +993,7 @@ NumericMatrix NewHollandWindProfile(float f, float rMax, float dP, float rho, Nu
   float sf;
   sf = (f / fabs(f));
   Bs = beta;
-  float rGale = 250.0; // Radius for gale force wind. This should be user defined
+  float rGale = rMax2; //250.0; // Radius for gale force wind. This should be user defined
   for(int i = 0;i < n; i++){
     //
     Ri = R[i];
@@ -1002,7 +1010,7 @@ NumericMatrix NewHollandWindProfile(float f, float rMax, float dP, float rho, Nu
     }
 
     delta = powf(rMax / Ri, Bs);
-    edelta = exp(-delta);
+    edelta = exp(1-delta);
 
     VZ(i,0) = sf * vMax*pow(delta * edelta, xx);
     VZ(i,1) = 0.0f;// Warning dummy value
@@ -1017,6 +1025,7 @@ NumericMatrix NewHollandWindProfile(float f, float rMax, float dP, float rho, Nu
 //' @param f single coriolis parameter at the centre of TC in hz
 //' @param vMax maximum wind velocity calculation in m/s
 //' @param rMax radius of maximum winds in km
+//' @param rMax2 radius of outer radial winds in km
 //' @param dP pressure differential, environmental less TC central pressure in hPa
 //' @param cP TC central pressure in hPa
 //' @param rho density of air in Kg/m3
@@ -1025,7 +1034,7 @@ NumericMatrix NewHollandWindProfile(float f, float rMax, float dP, float rho, Nu
 //' @return array with two columns for velocity and then vorticity.
 //' //@example DoubleHollandWindProfile(-1e-4,20,20,10,980,1.15,1.2,50)
 // [[Rcpp::export]]
-NumericMatrix DoubleHollandWindProfile(float f, float vMax, float rMax, float dP, float cP, float rho, float beta, NumericVector R)
+NumericMatrix DoubleHollandWindProfile(float f, float vMax, float rMax, float rMax2, float dP, float cP, float rho, float beta, NumericVector R)
 {
   //McConochie *et al*'s double Holland vortex model (based on Cardone *et
   //al*, 1994).This application is the Coral Sea adaptation of the
@@ -1041,7 +1050,7 @@ NumericMatrix DoubleHollandWindProfile(float f, float vMax, float rMax, float dP
 
   float beta1, beta2;
 
-  float rMax2 = 150.0f;
+  //float rMax2 = 150.0f;
   //float rMax1 = rMax;
   float gradientV1, gradientV2;
 
@@ -1146,6 +1155,7 @@ NumericMatrix DoubleHollandWindProfile(float f, float vMax, float rMax, float dP
 //' @title Double Holland Pressure Profile
 //' @description Pressure profile at grid points
 //' @param rMax radius of maximum winds in km
+//' @param rMax2 radius of outer radial winds in km
 //' @param dP pressure differential, environmental less TC central pressure in hPa
 //' @param cP TC central pressure in hPa
 //' @param beta exponential term for Holland vortex
@@ -1153,7 +1163,7 @@ NumericMatrix DoubleHollandWindProfile(float f, float vMax, float rMax, float dP
 //' @return vector of pressures.
 //' //@example DoubleHollandPressureProfile(20,20,980,1.2,50)
 // [[Rcpp::export]]
-NumericVector DoubleHollandPressureProfile(float rMax, float dP, float cP,  float beta, NumericVector R)
+NumericVector DoubleHollandPressureProfile(float rMax,float rMax2, float dP, float cP,  float beta, NumericVector R)
 {
   //Holland pressure Profile
   int n = R.size();
@@ -1164,7 +1174,7 @@ NumericVector DoubleHollandPressureProfile(float rMax, float dP, float cP,  floa
   float beta1, beta2;
   float nu, mu, enu, emu;
 
-  float rMax2 = 150.0f;
+  //float rMax2 = 150.0f;
   float rMax1 = rMax;
   dP = dP*100;
   cP = cP*100;
@@ -1296,7 +1306,6 @@ NumericMatrix McConochieWindField(float rMax, float vMax, float vFm, float theta
   float thetaFmRAD;
   float piOn180 = pi / 180.0f;
   thetaFmRAD = thetaFm * piOn180;
-  rMax = rMax;
   float sf;
   sf = f/fabs(f);
   thetaMaxAbsolute = thetaFmRAD + thetaMax*-1.0f*sf;
@@ -1352,7 +1361,7 @@ NumericMatrix McConochieWindField(float rMax, float vMax, float vFm, float theta
 //' @param VZ array two columns velocity then vorticity
 //' @param surface equals one if winds are reduced from the gradient level to the surface, otherwise gradient winds.
 //' @return array with two columns for zonal and meridional wind speed vector-components.
-//' //@example KepertWindField(20,20,2,10,-1e-4,rbind(c(50,35),c(45,40)),rbind(c(20,2),c(22,3)))
+//' //@example KepertWindField(20,20,2,10,-1e-4,rbind(c(50,35),c(45,40)),rbind(c(20,2),c(22,3)),surface=1)
 // [[Rcpp::export]]
 NumericMatrix KepertWindField(float rMax, float vMax, float vFm, float thetaFm, float f, NumericMatrix Rlam, NumericMatrix VZ,float surface)
 {
@@ -1376,7 +1385,7 @@ NumericMatrix KepertWindField(float rMax, float vMax, float vFm, float thetaFm, 
   
   NumericVector V = VZ( _ , 0 );
   int n = V.size();
-  NumericMatrix UwVw(n,2);
+  NumericMatrix UwVwKs(n,3);
 
   float Ri, Vi, Zi,fs;
   float lami;
@@ -1496,9 +1505,226 @@ NumericMatrix KepertWindField(float rMax, float vMax, float vFm, float thetaFm, 
     //  phi = pi - phi;
     //}
     float square_term = sqrtf(usf*usf + vsf *vsf);
-    UwVw(i,0) = square_term * sinf(phi - lami)*Ks;
-    UwVw(i,1) = square_term * cosf(phi - lami)*Ks;
-
+    UwVwKs(i,0) = square_term * sinf(phi - lami)*Ks;
+    UwVwKs(i,1) = square_term * cosf(phi - lami)*Ks;
+    UwVwKs(i,2) = Ks;
   }
-  return UwVw;
+  return UwVwKs;
+}
+
+//' @title Kepert Vertical Wind Field (u, v, Ks, w)
+//' @description As your KepertWindField but also computes vertical velocity
+//'              w(r) = (1/r) * dQ/dr where
+//'              Q(r) = r*C*Vg*(Vg + 2*vs) / ( f + Vg/r + dVg/dr ).
+//'              Derivatives use 3-point stencils with radii r - dr, r, r + dr.
+//'
+//' @param rMax radius of maximum winds in km
+//' @param vMax maximum wind velocity in m/s
+//' @param vFm forward speed of TC (m/s)
+//' @param thetaFm forward direction of TC (deg)
+//' @param f single coriolis parameter (1/s)
+//' @param Rlam two columns: [radius_km, azimuth_deg] from grid point to TC centre
+//' @param VZ two columns: [Vi (m/s), Zi (1/s)]
+//' @param surface equals 1 for surface winds (reduced from gradient level),
+//'        otherwise gradient winds.
+//' @param dr_m finite-difference step in metres (default 10 m)
+//'
+//' @return NumericMatrix with columns:
+//'         1) u (m/s), 2) v (m/s), 3) Ks (-), 4) w (m/s)
+// [[Rcpp::export]]
+NumericMatrix KepertVerticalWindField(
+     float rMax, float vMax, float vFm, float thetaFm, float f,
+     NumericMatrix Rlam, NumericMatrix VZ, float surface,
+     double dr_m = 10.0)
+ {
+   const int n = VZ.nrow();
+   NumericMatrix Out(n, 4);
+   
+   // constants (kept exactly as in your code)
+   const double pi = 3.14159265358979323846;
+   const double piOn180 = pi / 180.0;
+   const double K  = 50.0;     // eddy diffusivity (m^2/s)
+   const double Cd = 0.002;    // drag coeff (const)
+   const double tiny = 1e-6;
+   
+   const double rMax_m = rMax * 1000.0;
+   const double thetaFm_rad = thetaFm * piOn180;
+   
+   for (int i = 0; i < n; ++i) {
+     
+     // ------------------------------
+     // Inputs for this grid point
+     // ------------------------------
+     const double lami_deg = Rlam(i,1);
+     const double lami     = lami_deg * piOn180;
+     const double fs       = f / std::abs(f);
+     
+     const double Vi = VZ(i,0);    // gradient wind (background) [m/s]
+     const double Zi = VZ(i,1);    // vorticity [1/s]
+     
+     // Base radius (metres)
+     const double Ri0_m = Rlam(i,0) * 1000.0;
+     
+     // Always compute u,v,Ks at the base radius (Ri0_m)
+     // Then compute w using three radii (Ri0_m - dr, Ri0_m, Ri0_m + dr).
+     // If Ri0_m < dr_m, we can't do a central derivative => w = NA.
+     
+     // ------------------------------
+     // Helper arrays for 3 radii
+     // ------------------------------
+     double Rm[3];
+     Rm[0] = Ri0_m - dr_m;   // r - dr
+     Rm[1] = Ri0_m;          // r
+     Rm[2] = Ri0_m + dr_m;   // r + dr
+     
+     // Store per-radius values we need for w:
+     double vs_arr[3];   // surface wind speed magnitude
+     double Vg_arr[3];   // gradient wind magnitude
+     // double Ks_arr[3];   // reduction factor
+     
+     // Also track base u, v at k=1 (r)
+     double u_base = NA_REAL, v_base = NA_REAL, Ks_base = NA_REAL;
+     
+     // -----------------------------------------
+     // Loop k over three radii: r-dr, r, r+dr
+     // (Vi, Zi and lami held fixed as in your R code)
+     // -----------------------------------------
+     for (int k = 0; k < 3; ++k) {
+       
+       // If radius <= 0, just mirror a tiny radius to avoid singularities.
+       double Ri_m = Rm[k];
+       if (Ri_m <= 0.0) Ri_m = tiny;
+       
+       // Forward motion scaling (same as your code)
+       double Umod = vFm;
+       if ((vFm > 0.0) && ((vMax / vFm) < 5.0)) {
+         Umod = vFm * std::abs(1.25 * (1.0 - (vFm / vMax)));
+       }
+       
+       double Vt = Umod;
+       if (Ri_m >= (2.0 * rMax_m)) {
+         const double x = (Ri_m / (2.0 * rMax_m)) - 1.0;
+         Vt = Umod * std::exp(-x * x);
+       }
+       
+       // Boundary layer parameters
+       const double al   = ((2.0 * Vi / Ri_m) + f) / (2.0 * K);
+       const double be   = (f + Zi) / (2.0 * K);
+       const double gam  = Vi / (2.0 * K * Ri_m);
+       const double albe = std::sqrt(al / be);
+       
+       const double chi = std::abs((Cd / K) * Vi / std::sqrt(std::sqrt(al * be)));
+       const double eta = std::abs((Cd / K) * Vi / std::sqrt(std::sqrt(al * be) + std::abs(gam)));
+       const double psi = std::abs((Cd / K) * Vi / std::sqrt(std::abs(std::sqrt(al * be) - std::abs(gam))));
+       
+       double Ks = ((chi*chi) + 2.0*chi + 2.0) / (2.0*chi*chi + 3.0*chi + 2.0); // Eq. 30
+       if (surface < 1.0) Ks = 1.0;
+       
+       // Symmetric component
+       const double A0r = -(chi * (1.0 + 0.0 * (1.0 + chi)) * Vi) / (2.0*chi*chi + 3.0*chi + 2.0);
+       const double A0i = -(chi * (1.0 + 1.0 * (1.0 + chi)) * Vi) / (2.0*chi*chi + 3.0*chi + 2.0);
+       const double u0s = A0r * albe * fs;
+       const double v0s = A0i;
+       
+       // First asymmetric
+       double Amr = -(psi * (1.0 + 2.0*albe + (1.0+0.0)*(1.0+albe) * eta) * Vt) /
+         (albe * ((2.0 + 0.0) * (1.0 + eta*psi) + 3.0*psi + 0.0 * 3.0 * eta));
+       double Ami = -(psi * (1.0 + 2.0*albe + (1.0+1.0)*(1.0+albe) * eta) * Vt) /
+         (albe * ((2.0 + 2.0) * (1.0 + eta*psi) + 3.0*psi + 3.0 * eta));
+       
+       if (std::abs(gam) > std::sqrt(al*be)) {
+         Amr = -(psi * (1.0 + 2.0*albe + (1.0+0.0)*(1.0+albe) * eta) * Vt) /
+           (albe * ((2.0 - 0.0) + 3.0*(eta + psi) + (2.0 + 0.0) * eta * psi));
+         Ami = -(psi * (1.0 + 2.0*albe + (1.0+1.0)*(1.0+albe) * eta) * Vt) /
+           (albe * ((2.0 - 2.0) + 3.0*(eta + psi) + (2.0 + 2.0) * eta * psi));
+       }
+       
+       const double lami2 = (lami - thetaFm_rad);
+       const double ums = (Amr * std::cos(lami2 * fs)) * albe;
+       const double vms = (Ami * (-std::sin(lami2 * fs))) * fs;
+       
+       // Second asymmetric
+       double Apr = -(eta * (1.0 - 2.0*albe + (1.0 + 0.0) * (1.0 - albe) * psi) * Vt) /
+         (albe * ((2.0 + 0.0) * (1.0 + eta*psi) + 3.0*eta + 0.0 * 3.0 * psi));
+       double Api = -(eta * (1.0 - 2.0*albe + (1.0 + 1.0) * (1.0 - albe) * psi) * Vt) /
+         (albe * ((2.0 + 2.0) * (1.0 + eta*psi) + 3.0*eta + 3.0 * psi));
+       
+       if (std::abs(gam) > std::sqrt(al*be)) {
+         Apr = -(eta * (1.0 - 2.0*albe + (1.0 - 0.0) * (1.0 - albe) * psi) * Vt) /
+           (albe * (2.0 + 0.0 + 3.0*(eta + psi) + (2.0 - 0.0) * eta * psi));
+         Api = -(eta * (1.0 - 2.0*albe + (1.0 - 1.0) * (1.0 - albe) * psi) * Vt) /
+           (albe * (2.0 + 2.0 + 3.0*(eta + psi) + (2.0 - 2.0) * eta * psi));
+       }
+       
+       const double ups = (Apr * std::cos(lami2 * fs)) * albe;
+       const double vps = (Api * ( std::sin(lami2 * fs))) * fs;
+       
+       // Total surface wind in moving frame
+       const double us = u0s + ups + ums;
+       const double vs = v0s + vps + vms + Vi;
+       
+       // Transform back to earth-relative
+       const double usf = us + Vt * std::cos(lami2);
+       const double vsf = vs - Vt * std::sin(lami2);
+       const double phi = std::atan2(usf, vsf);
+       const double spd = std::sqrt(usf*usf + vsf*vsf);
+       
+       // u,v at *surface* including reduction Ks
+       const double u_sfc = spd * std::sin(phi - lami) * Ks;
+       const double v_sfc = spd * std::cos(phi - lami) * Ks;
+       
+       // Unit tangential vector at angle lami (CCW from +x): e_t = (-sin lami, cos lami)
+       const double e_t_x = -std::sin(lami);
+       const double e_t_y =  std::cos(lami);
+       
+       // Surface u,v we just computed already include Ks
+       const double vtan_sfc = u_sfc * e_t_x + v_sfc * e_t_y;  // v(0): surface tangential wind
+       const double vtan_g   = vtan_sfc / Ks;                  // V: gradient tangential wind
+       
+       // Save fields for w
+       vs_arr[k] = vtan_sfc;   // v(0)
+       Vg_arr[k] = vtan_g;     // V
+       
+       // Keep base u,v,Ks for output (k==1 corresponds to radius r)
+       if (k == 1) {
+         u_base = u_sfc;
+         v_base = v_sfc;
+         Ks_base = Ks;
+       }
+     } // end k loop
+     
+     // Write base u,v,Ks
+     Out(i,0) = u_base;
+     Out(i,1) = v_base;
+     Out(i,2) = Ks_base;
+     
+     // Compute w only if we can do central differences
+     if (Ri0_m < dr_m) {
+       Out(i,3) = NA_REAL;
+       continue;
+     }
+     
+     // dVg/dr at r (central), and one-sided at r±dr using the 3 available points
+     const double dVdr_minus = (Vg_arr[1] - Vg_arr[0]) / dr_m;        // at r - dr (forward 1st order)
+     //const double dVdr_0     = (Vg_arr[2] - Vg_arr[0]) / (2.0*dr_m);  // at r (central)
+     const double dVdr_plus  = (Vg_arr[2] - Vg_arr[1]) / dr_m;        // at r + dr (backward 1st order)
+     
+     // Build Q at r - dr and r + dr
+     auto Q_of = [&](double r_m, double Vg, double vs, double dVdr) {
+       double denom = f + Vg / r_m + dVdr;
+       if (std::abs(denom) < tiny) denom = tiny * (denom >= 0 ? 1.0 : -1.0);
+       return r_m * Cd * Vg * (Vg + 2.0 * vs) / denom;
+     };
+     
+     const double Q_minus = Q_of(Rm[0], Vg_arr[0], vs_arr[0], dVdr_minus);
+     const double Q_plus  = Q_of(Rm[2], Vg_arr[2], vs_arr[2], dVdr_plus);
+     
+     // dQ/dr at r (central 2nd order with three points)
+     const double dQdr = (Q_plus - Q_minus) / (2.0 * dr_m);
+     
+     // Vertical velocity: w = (1/r) * dQ/dr (upward positive)
+     Out(i,3) = -dQdr / Ri0_m;
+   }
+   
+   return Out;
 }

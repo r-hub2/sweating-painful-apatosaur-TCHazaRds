@@ -16,7 +16,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-R's compatibility to easily use fast Cpp code ([Rcpp](https://github.com/RcppCore/Rcpp)) and spatial processing (e.g. [terra](https://github.com/rspatial/terra)) makes it an attractive opensource environment to study [tropical cyclones](https://en.wikipedia.org/wiki/Tropical_cyclone), aka TCs, hurricanes and typhoons. This package estimates TC vortex wind and pressure fields using parametric equations originally coded up in python by [TCRM](https://github.com/GeoscienceAustralia/tcrm) and in Cuda Cpp by [TCwindgen](https://github.com/CyprienBosserelle/TCwindgen).
+R's compatibility to easily use fast `Cpp` code ([Rcpp](https://github.com/RcppCore/Rcpp)) and spatial processing (e.g. [terra](https://github.com/rspatial/terra)) makes it an attractive open source environment to study [tropical cyclones](https://en.wikipedia.org/wiki/Tropical_cyclone), also known as TCs, hurricanes and typhoons. This package estimates TC vortex wind and pressure fields using parametric equations originally coded up in python by [TCRM](https://github.com/GeoscienceAustralia/tcrm) and in Cuda Cpp by [TCwindgen](https://github.com/CyprienBosserelle/TCwindgen).
 
 TC wind fields can be computed using three model inputs of the: 1) [TC Track](#input1), 2) [Model Parameters](#input2) and 3) [Model Spatial Domain](#input3). The TCHazaRds package can be used with other visualization and spatial analysis packages to analyse the impacts of TCs.
 
@@ -48,7 +48,7 @@ TCi$thetaFm = 90-returnBearing(TCi) #direction of the heading of the TC (Cartesi
 
 ```
 
-In the above code chunk a simple track segment is defined, but historical TC tracks, e.g. from IBTRACs, can provide the input into the model. A few tracks are provided with the package, below TC Yasi is read in.
+In the above code chunk a simple track segment is defined, but historical TC tracks, e.g. from Best Track Archive for Climate Stewardship (IBTrACS), can provide the input into the model. A few tracks are provided with the package, below TC Yasi is read in.
 
 ```{r}
 TC <- vect(system.file("extdata/YASI/YASI.shp", package="TCHazaRds"))
@@ -66,7 +66,6 @@ The second thing required to run the model is a list of parameters, which are pr
 
 ```{r}
 paramsTable = read.csv(system.file("extdata/tuningParams/defult_params.csv",package = "TCHazaRds"))
-#paramsTable$value[6:7] = c(0,0)
 knitr::kable(paramsTable,caption = "Parameter file")
 ```
 <a name="Input3"></a>
@@ -91,7 +90,7 @@ GEO_land = land_geometry(land_r,inland_proximity)
 
 ```
 
-## Output Wind and Wave Feild 
+## Output Wind and Wave Field 
 Now that we have the three inputs (tracks, parameters and model output geometry) we can compute and plot the spatial wind hazard. See [Making maps in R](https://r.geocompx.org/adv-map.html) for plotting method. Ocean Wave parameters can be returned with `returnWaves = TRUE`
 
 ```{r, out.width = '80%',fig.height=4,fig.width=6, fig.align = "center"}
@@ -120,7 +119,8 @@ if (.Platform$OS.type == "windows"){
 The hazard can be also calculated for the entire track too (by adding a `s` to the end of `TCHazaRdsWindField` to make it plural), and then the maximum wind speed at each grid cell can be plotted.
 
 ```{r, out.width = '80%',fig.height=4,fig.width=6, fig.align = "center"}
-HAZ = TCHazaRdsWindFields(GEO_land=GEO_land,TC=TC,paramsTable=paramsTable)
+TC = crop(TC,as.polygons(ext(GEO_land)))
+HAZ = TCHazaRdsWindFields(GEO_land=GEO_land,TC=TC,paramsTable=paramsTable,returnWaves = TRUE)
 sp::spplot(max(HAZ$Sw),at=ats,sp.layout = TC_sp)
 ```
 
@@ -179,10 +179,33 @@ plot(HAZp,"Sw",levels=ats,col = wcol(13),range = range(ats),type="continuous",bo
 lines(TC)
 ```
 
+TC wind fields can be modelled, or tested, with observed, or constant, B (Beta) profile peakedness parameter by defining TC$B and setting `betaModel = NA` in paramsTable
+```{r}
+TCi$B = 2.2
+paramsTableCB = paramsTable
+paramsTableCB$value[paramsTableCB$param == "betaModel"] = NA
+HAZpCP = TCHazaRdsWindProfile(GEO_land_v,TCi,paramsTableCB)
+
+```
+
+Other parameters can be adjusted, here we model a larger outer radius (RMAX2) profile parameter by defining TC$RMAX2 and setting rMax2Model = NA in paramsTable
+```{r}
+TCi$RMAX2 = 200
+paramsTableRMAX2 = paramsTable
+paramsTableRMAX2$value[paramsTableRMAX2$param == "rMax2Model"] = NA
+HAZpRMAX2 = TCHazaRdsWindProfile(GEO_land_v,TCi,paramsTableRMAX2)
+
+```
+
+
 Positive radial distance values are to the right of the forward motion (90 deg clockwise).
 
 ```{r, out.width = '80%',fig.height=4,fig.width=6, fig.align = "center"}
-plot(HAZp$radialdist,HAZp$Sw,type="l",xlab = "Radial distance [km]",ylab = "Wind speed [m/s]");grid()
+plot(HAZp$radialdist,HAZp$Sw,type="l",xlab = "Radial distance [km]",ylab = "Wind speed [m/s]",ylim = c(0,70));grid()
+lines(HAZp$radialdist,HAZpCP$Sw,col=2)
+lines(HAZpRMAX2$radialdist,HAZpRMAX2$Sw,col=4)
+legend("topleft",c("B = MK14, RMAX2 = 150 km",paste0("B = ",TCi$B,", RMAX2 = 150 km"),paste0("B = MK14, RMAX2 = ",TCi$RMAX2," km")),lty=1,col = c(1,2,4),cex=.7)
+title("Profiles of different peakness B and outer radius RMAX2 parameters",cex.main=.9)
 
 ```
 

@@ -33,7 +33,6 @@ TCi = TC[46]
 
 ## -----------------------------------------------------------------------------
 paramsTable = read.csv(system.file("extdata/tuningParams/defult_params.csv",package = "TCHazaRds"))
-#paramsTable$value[6:7] = c(0,0)
 knitr::kable(paramsTable,caption = "Parameter file")
 
 ## ----out.width = '80%',fig.height=4,fig.width=6, fig.align = "center"---------
@@ -71,7 +70,8 @@ if (.Platform$OS.type == "windows"){
 }
 
 ## ----out.width = '80%',fig.height=4,fig.width=6, fig.align = "center"---------
-HAZ = TCHazaRdsWindFields(GEO_land=GEO_land,TC=TC,paramsTable=paramsTable)
+TC = crop(TC,as.polygons(ext(GEO_land)))
+HAZ = TCHazaRdsWindFields(GEO_land=GEO_land,TC=TC,paramsTable=paramsTable,returnWaves = TRUE)
 sp::spplot(max(HAZ$Sw),at=ats,sp.layout = TC_sp)
 
 ## ----out.width = '80%',fig.height=4,fig.width=6, fig.align = "center"---------
@@ -114,7 +114,25 @@ plot(HAZi,"Sw",levels=ats,col = wcol(13),range = range(ats),type="continuous",al
 plot(HAZp,"Sw",levels=ats,col = wcol(13),range = range(ats),type="continuous",border="grey")#,all_levels=TRUE)
 lines(TC)
 
+## -----------------------------------------------------------------------------
+TCi$B = 2.2
+paramsTableCB = paramsTable
+paramsTableCB$value[paramsTableCB$param == "betaModel"] = NA
+HAZpCP = TCHazaRdsWindProfile(GEO_land_v,TCi,paramsTableCB)
+
+
+## -----------------------------------------------------------------------------
+TCi$RMAX2 = 200
+paramsTableRMAX2 = paramsTable
+paramsTableRMAX2$value[paramsTableRMAX2$param == "rMax2Model"] = NA
+HAZpRMAX2 = TCHazaRdsWindProfile(GEO_land_v,TCi,paramsTableRMAX2)
+
+
 ## ----out.width = '80%',fig.height=4,fig.width=6, fig.align = "center"---------
-plot(HAZp$radialdist,HAZp$Sw,type="l",xlab = "Radial distance [km]",ylab = "Wind speed [m/s]");grid()
+plot(HAZp$radialdist,HAZp$Sw,type="l",xlab = "Radial distance [km]",ylab = "Wind speed [m/s]",ylim = c(0,70));grid()
+lines(HAZp$radialdist,HAZpCP$Sw,col=2)
+lines(HAZpRMAX2$radialdist,HAZpRMAX2$Sw,col=4)
+legend("topleft",c("B = MK14, RMAX2 = 150 km",paste0("B = ",TCi$B,", RMAX2 = 150 km"),paste0("B = MK14, RMAX2 = ",TCi$RMAX2," km")),lty=1,col = c(1,2,4),cex=.7)
+title("Profiles of different peakness B and outer radius RMAX2 parameters",cex.main=.9)
 
 
